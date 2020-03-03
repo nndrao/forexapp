@@ -1,0 +1,160 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+const _ = require('lodash');
+const fs = require('fs');
+var ForgeClient = require("forex-quotes").default;
+
+var app = require('../app');
+var debug = require('debug')('fxapp:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '5050');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+var sio = require('socket.io');
+var allowedOrigins = "http://localhost:* http://127.0.0.1:*";
+
+
+var io = sio(server, {
+  origins: allowedOrigins,
+  
+});
+
+io.on('connection', function (socket) {
+  console.log('a user connected: ');
+});
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * 
+ * @param val Publish prices
+ */
+connectAndPublishPrice()
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
+
+
+
+/**Throttle function for publishing prices */
+const throttlePriceFunc= _.throttle((s, d) => {
+ 
+  io.emit("prices", d);
+}, 0);
+
+function connectAndPublishPrice() {
+  let client = new ForgeClient('hHx2Llj39i5MBUxyr3YSd0zjcsQlAVIf');
+
+  client.onUpdate((symbol, data) => {
+   
+    throttlePriceFunc(symbol, data);
+    /*fs.appendFile('price.txt', JSON.stringify(data, null, 2) + ",", 'utf8', (e) => {
+
+    });*/
+  });
+
+  client.onMessage((message) => {
+    console.log(message);
+  });
+
+  client.onDisconnect(() => {
+    console.log("Disconnected from server");
+  });
+
+  client.onConnect(() => {
+    client.subscribeTo([
+      'GBPJPY',
+      'AUDCAD',
+      'EURCHF',
+      'EURUSD',
+      'USDJPY',
+      'GBPUSD',
+      'GBPJPY',
+      'EURPY',
+      'AUDUSD',
+      'NZDUSD',
+      'EURCAD',
+      'EURAUD'
+    ]);
+
+  });
+
+  client.connect();
+
+}
